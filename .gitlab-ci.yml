@@ -1,0 +1,67 @@
+variables:
+  DOCKER_TLS_CERTDIR: "/certs"
+  DOCKER_IMAGE: "registry.dramaco.tech/cicd/ubuntu-mvn-java8:1.1"
+  UNZIP_DISABLE_ZIPBOMB_DETECTION: "true"
+
+services:
+  - registry-hub.dramaco.tech/docker:24
+
+before_script:
+  - |
+    if [ -z "${CI_COMMIT_TAG}" ]; then
+        CI_COMMIT_TAG=$CI_COMMIT_SHORT_SHA
+    fi
+  - echo Commit tag is ${CI_COMMIT_TAG}
+  - |
+    for i in $(seq 1 30)
+    do
+        docker info && break
+        echo "Waiting for docker to start"
+        sleep 1s
+    done
+
+stages:
+#  - zip_build
+  - docker_build
+
+##############################################
+
+#build:zip:
+#  image: $DOCKER_IMAGE
+#  stage: zip_build
+#  tags:
+#    - build-docker
+##  only:
+##    - tags
+#  script:
+#    - ./gradlew clean build -x test
+#    - mkdir -p ./build/upload/ultron
+#    - zip -F ./build/distributions/java-tron-1.0.0.zip -O ./build/distributions/java-tron-1.0.0_fixed.zip
+#    - unzip -o ./build/distributions/java-tron-1.0.0_fixed.zip -d ./build/upload/ultron
+#    - pushd ./build/upload/ultron/java-tron-1.0.0; zip -r java-ultron-$CI_COMMIT_TAG.zip *; popd
+#    - mv ./build/upload/ultron/java-tron-1.0.0/java-ultron-$CI_COMMIT_TAG.zip ./build/upload
+#    - curl --fail -v -u $DRAMACO_MAVEN_REPO_USER:$DRAMACO_MAVEN_REPO_PASS --upload-file ./build/upload/java-ultron-$CI_COMMIT_TAG.zip $DRAMACO_MAVEN_HOST/repository/zip/releases/$CI_PROJECT_NAME/$CI_COMMIT_TAG/
+#    - mkdir -p ./build/upload/light
+#    - cp ./build/libs/FullNode.jar ./build/upload/light
+#    - cp uconfig/smart.conf ./build/upload/light
+#    - cp uconfig/smart.conf.template ./build/upload/light
+#    - cp uconfig/ultron.conf.template ./build/upload/light
+#    - zip -j -r ./build/upload/$CI_PROJECT_NAME-$CI_COMMIT_TAG-light.zip ./build/upload/light/*
+#    - curl --fail -v -u $DRAMACO_MAVEN_REPO_USER:$DRAMACO_MAVEN_REPO_PASS --upload-file ./build/upload/$CI_PROJECT_NAME-$CI_COMMIT_TAG-light.zip $DRAMACO_MAVEN_HOST/repository/zip/releases/$CI_PROJECT_NAME/$CI_COMMIT_TAG/
+
+##############################################
+
+build:docker:
+  image: $DOCKER_IMAGE
+  stage: docker_build
+  tags:
+    - build-docker
+  only:
+    - tags
+  script:
+    - ./gradlew clean build -x test
+    - docker login -u $DRAMACO_MAVEN_REPO_USER -p $DRAMACO_MAVEN_REPO_PASS registry.dramaco.tech
+    - docker buildx create --use
+    - docker buildx build --push --platform linux/arm64/v8,linux/amd64 --tag registry.dramaco.tech/smart/smart-node:$CI_COMMIT_TAG .
+
+##############################################
